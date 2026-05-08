@@ -1,0 +1,23 @@
+﻿# Credenciales y secretos
+.env
+credentials.json
+token.json
+client_secret_*.json
+
+# Datos procesados
+mensajes_procesados.json
+facturas_procesadas.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Logs
+logs/
+*.log
+
+# Carpetas de trabajo
+files/Facturas_de_gasto/
+files/csv_output/
+files/xlsx_output/

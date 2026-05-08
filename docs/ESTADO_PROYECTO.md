@@ -58,3 +58,25 @@
 ## Cómo retomar en una nueva conversación
 Pegar este archivo completo al inicio del chat con el mensaje:
 'Soy Martín Lameiro, retomo el desarrollo del ERP de ISBEROAL. Este es el estado del proyecto:'
+
+## Sesión 08/05/2026 - Tarde
+
+### Hecho
+- Repo subido a GitHub correctamente
+- Token Gmail antiguo revocado y regenerado por seguridad
+- Agente local verificado funcionando con cuenta mlameiro@isberoal.com
+
+### Confirmado
+- Agente autenticado con: mlameiro@isberoal.com
+- Lee correos enviados a: contabilidad@isberoal.com (grupo donde está mlameiro)
+- Sigue corriendo en local desde G:\Unidades compartidas\...\Accounts-Payable\files\
+- Próxima ejecución programada: lunes 9:00 AM
+
+### Pendiente próxima sesión
+1. Crear cuenta en Railway
+2. Configurar deploy del agente accounts-payable
+3. Generar token Gmail compatible con servidor (sin navegador)
+4. Configurar variables de entorno en Railway
+5. Programar cron a las 2:00 AM
+6. Probar en modo --solo-xlsx antes de activar import a Holded
+7. Coordinar desactivación del .bat local con Ismael cuando Railway esté operativo

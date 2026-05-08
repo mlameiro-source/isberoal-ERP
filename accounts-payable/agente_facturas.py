@@ -81,18 +81,42 @@ claude = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 # ─────────────────────────────────────────────
 
 def conectar_gmail():
-    """Autentica con Gmail y devuelve el servicio."""
+    """
+    Autentica con Gmail y devuelve el servicio.
+
+    Orden de prioridad:
+    1. Variable de entorno GMAIL_TOKEN_JSON (modo Railway/producción headless)
+    2. Archivo token.json local (modo desarrollo en máquina con navegador)
+    3. Flujo OAuth interactivo con navegador (primera vez en local)
+    """
     creds = None
 
-    if Path(GMAIL_TOKEN_PATH).exists():
+    token_env = os.getenv("GMAIL_TOKEN_JSON")
+    if token_env:
+        try:
+            creds = Credentials.from_authorized_user_info(json.loads(token_env), SCOPES)
+            log.info("[OK] Credenciales Gmail cargadas desde variable de entorno")
+        except Exception as e:
+            log.error(f"[ERROR] No se pudo parsear GMAIL_TOKEN_JSON: {e}")
+            creds = None
+
+    if not creds and Path(GMAIL_TOKEN_PATH).exists():
         creds = Credentials.from_authorized_user_file(GMAIL_TOKEN_PATH, SCOPES)
 
+    if creds and creds.expired and creds.refresh_token:
+        creds.refresh(Request())
+        if not token_env:
+            with open(GMAIL_TOKEN_PATH, "w") as f:
+                f.write(creds.to_json())
+
     if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
-            flow = InstalledAppFlow.from_client_secrets_file(GMAIL_CREDENTIALS, SCOPES)
-            creds = flow.run_local_server(port=0)
+        if os.getenv("RAILWAY_ENVIRONMENT"):
+            raise RuntimeError(
+                "No hay credenciales válidas en GMAIL_TOKEN_JSON. "
+                "Genera el token en local y súbelo a Railway como variable de entorno."
+            )
+        flow = InstalledAppFlow.from_client_secrets_file(GMAIL_CREDENTIALS, SCOPES)
+        creds = flow.run_local_server(port=0)
         with open(GMAIL_TOKEN_PATH, "w") as f:
             f.write(creds.to_json())
 

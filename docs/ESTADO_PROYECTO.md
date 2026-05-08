@@ -80,3 +80,29 @@ Pegar este archivo completo al inicio del chat con el mensaje:
 5. Programar cron a las 2:00 AM
 6. Probar en modo --solo-xlsx antes de activar import a Holded
 7. Coordinar desactivación del .bat local con Ismael cuando Railway esté operativo
+
+## Sesión 08/05/2026 - Noche
+
+### Hecho
+
+- Repo conectado a Railway (proyecto `empathetic-illumination`, región US West)
+- Root Directory configurado a `accounts-payable`
+- Commit `e3d9c85` mergeado a main:
+  - Creado `accounts-payable/requirements.txt` con dependencias mínimas
+  - `conectar_gmail()` adaptado para Railway: lee credenciales desde variable de entorno `GMAIL_TOKEN_JSON` con fallback a `token.json` local
+  - Compatibilidad total con flujo local actual mantenida
+
+### Pendiente próxima sesión
+
+1. Relanzar deploy en Railway (build debería pasar ahora)
+2. Configurar variables de entorno en Railway:
+   - `GMAIL_TOKEN_JSON` (contenido del token.json local)
+   - `ANTHROPIC_API_KEY`
+   - Revisar `.env` local por si hay más variables a portar
+3. Probar ejecución manual del agente desde Railway
+4. Configurar cron `0 2 * * *` en Railway
+5. Coordinar con Ismael la desactivación del .bat local
+
+### Pendiente menor
+
+- Borrar carpeta huérfana `.claude/worktrees/determined-gauss-b7368c` después del próximo reinicio

@@ -12,6 +12,13 @@ Configuración:
     Crear archivo .env con:
         HOLDED_API_KEY=tu_api_key_aqui
         GOOGLE_CREDENTIALS_PATH=credentials.json
+
+    Variables de entorno opcionales (modo Railway / producción headless):
+        GMAIL_TOKEN_JSON       JSON completo del token Gmail (sustituye a token.json)
+        RAILWAY_ENVIRONMENT    Cualquier valor activa modo Railway (logs solo a stdout,
+                               sin fallback OAuth interactivo)
+        ISBEROAL_SHADOW_MODE   "true" fuerza --solo-xlsx y desactiva import a Holded
+                               (modo seguro para validación en paralelo al agente local)
 """
 
 import os
@@ -63,13 +70,16 @@ for d in [FACTURAS_DIR, CSV_OUTPUT_DIR, XLSX_OUTPUT_DIR, LOGS_DIR]:
     d.mkdir(exist_ok=True)
 
 # Logging
+# En Railway (sistema de archivos efímero) solo escribimos a stdout.
+# En local mantenemos el FileHandler para tener histórico en disco.
+_log_handlers = [logging.StreamHandler()]
+if not os.getenv("RAILWAY_ENVIRONMENT"):
+    _log_handlers.insert(0, logging.FileHandler(LOGS_DIR / f"agente_{datetime.now().strftime('%Y%m%d')}.log"))
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
-    handlers=[
-        logging.FileHandler(LOGS_DIR / f"agente_{datetime.now().strftime('%Y%m%d')}.log"),
-        logging.StreamHandler()
-    ]
+    handlers=_log_handlers
 )
 log = logging.getLogger(__name__)
 
@@ -807,6 +817,13 @@ def ejecutar_agente(dias_atras=7, solo_xlsx=False, importar_holded=True, forzar=
     log.info("=" * 60)
     log.info("INICIANDO AGENTE DE FACTURAS DE COMPRA - ISBEROAL")
     log.info("=" * 60)
+
+    # SHADOW MODE: si la variable de entorno está activa, forzar modo seguro.
+    # Útil para validación en paralelo al agente local en producción.
+    if os.getenv("ISBEROAL_SHADOW_MODE", "").lower() == "true":
+        log.warning("[SHADOW MODE] Activo. No se importará a Holded. Solo se generará XLSX.")
+        solo_xlsx = True
+        importar_holded = False
 
     # Cargar registro de duplicados
     registro = cargar_procesados()

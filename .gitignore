@@ -1,23 +1,52 @@
-﻿# Credenciales y secretos
+﻿# ─────────────────────────────────────────────
+# CREDENCIALES Y SECRETOS - NUNCA SUBIR A GIT
+# ─────────────────────────────────────────────
 .env
+.env.local
 credentials.json
 token.json
 client_secret_*.json
 
-# Datos procesados
+# ─────────────────────────────────────────────
+# DATOS OPERATIVOS - LOCALES A CADA ENTORNO
+# ─────────────────────────────────────────────
 mensajes_procesados.json
 facturas_procesadas.json
 
-# Python
+# ─────────────────────────────────────────────
+# CARPETAS DE TRABAJO Y SALIDAS
+# ─────────────────────────────────────────────
+Facturas_de_gasto/
+csv_output/
+xlsx_output/
+logs/
+
+# Backups locales (.bak, .corrupto, etc.)
+*.bak
+*.corrupto
+
+# ─────────────────────────────────────────────
+# PYTHON
+# ─────────────────────────────────────────────
 __pycache__/
 *.pyc
 *.pyo
+*.pyd
 
-# Logs
-logs/
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# ─────────────────────────────────────────────
+# LOGS Y ARCHIVOS TEMPORALES
+# ─────────────────────────────────────────────
 *.log
+*.tmp
 
-# Carpetas de trabajo
-files/Facturas_de_gasto/
-files/csv_output/
-files/xlsx_output/
+# ─────────────────────────────────────────────
+# EDITORES E IDEs
+# ─────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp

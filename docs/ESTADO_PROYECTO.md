@@ -251,3 +251,46 @@ Pegar este archivo completo al inicio del chat con el mensaje:
 
 - Renombrar el proyecto Railway de `empathetic-illumination` a algo descriptivo (ej. `isberoal-erp-agents`).
 - Considerar migrar de Nixpacks (deprecated) a Railpack en una sesión futura.
+
+### Sesión 12/05/2026 - Tarde (continuación: cron schedule y validación adicional)
+ 
+#### Hecho
+ 
+- Cron Schedule configurado en Railway → ajustado finalmente a `0 3 * * *` (3:00 UTC = 5:00 CEST).
+- Primera configuración fue `30 15 * * *` (15:30 UTC = 17:30 CEST) pero Railway lo saltó a "tomorrow" porque ya eran las 16:30+ cuando se aplicó.
+- Reconfigurado a 5:00 CEST para que la primera ejecución automática del cron coincida con la mañana siguiente.
+- Botón `Run now` ejecutado manualmente como prueba del cron infrastructure → resultado: 2 entradas en Recent Executions, una de 4m 37s (ejecución completa de los 26 correos) y otra de 7s (probable duplicado de Railway al usar Run now). Ambas en SHADOW MODE confirmado.
+- Verificado en la nueva pestaña **Cron Runs** de Railway:
+  - Estado del servicio pasa de "Active 24/7" a "Ready" (esperando cron).
+  - Tras Run now: tarjeta muestra "Last run succeeded".
+  - Próxima ejecución: mañana 5:00 CEST automática.
+#### Incidente menor durante la sesión: cambio accidental a Railpack y reversión
+ 
+- Al editar el cron, Railway mostró el Builder actual como **Railpack** marcado como "Default", pero los logs del primer build exitoso confirmaron que el build real se hizo con **Nixpacks v1.41.0**. Hubo confusión en la UI sobre qué builder estaba activo realmente.
+- Se cambió accidentalmente el Builder a Railpack a mitad de sesión.
+- Decisión: **revertir a Nixpacks** para no introducir variables nuevas la noche previa a la primera ejecución automática del cron, dado que con Nixpacks ya teníamos 3 ejecuciones validadas.
+- Builder final: Nixpacks (Deprecated). La migración a Railpack queda formalmente postpuesta a una sesión específica con tiempo de validar.
+#### Hallazgo informativo: Serverless no disponible con cron
+ 
+- Captura de Railway: **"Serverless is not available for services that have a cron schedule."**
+- No podemos activar Serverless en este servicio. No es problema: el coste de un cron diario es mínimo. Decisión cerrada, no requiere acción.
+#### Estado al cerrar la sesión
+ 
+- Servicio Railway `isberoal-ERP`: **Ready**
+- Builder: Nixpacks v1.41.0
+- Custom Start Command: `python agente_facturas.py --dias 1`
+- Cron: `00 03 * * *` (5:00 CEST diario)
+- Variables: HOLDED_API_KEY, ANTHROPIC_API_KEY, GMAIL_TOKEN_JSON, ISBEROAL_SHADOW_MODE=true
+- Last run: succeeded (Run now manual de las 17:33 CEST, duración 4m 37s)
+- Next run: mañana 13/05/2026 a las 5:00 CEST (automático)
+- Producción Drive: intacta, sin cambios.
+#### Pendiente al llegar a la oficina el 13/05/2026
+ 
+1. Verificar en Railway → Cron Runs → Recent Executions que apareció una nueva entrada con timestamp 5:00 CEST y estado Success.
+2. Click en View logs y confirmar:
+   - `[OK] Credenciales Gmail cargadas desde variable de entorno`
+   - `[WARNING] [SHADOW MODE] Activo`
+   - Sin errores ni Tracebacks al final
+   - Cero llamadas a `api.holded.com`
+3. Si OK: el cron funciona en automático. Empezar oficialmente la ventana de validación shadow de 5-7 días.
+4. Si falla: capturar logs y diagnosticar.

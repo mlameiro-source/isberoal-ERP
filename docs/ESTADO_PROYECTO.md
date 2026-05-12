@@ -199,3 +199,55 @@ Pegar este archivo completo al inicio del chat con el mensaje:
   * $env:ISBEROAL\_SHADOW\_MODE = "true"
   * python agente\_facturas.py --dias 1
 
+## Sesión 12/05/2026 - Tarde
+
+### Hecho
+
+- Deploy del agente accounts-payable en Railway COMPLETADO con éxito.
+- Cuenta Railway creada con login GitHub, conectada al repo `mlameiro-source/isberoal-ERP`.
+- Configuración del servicio `isberoal-ERP` en Railway:
+  - Source: `mlameiro-source/isberoal-ERP`, branch `main`
+  - Root Directory: `accounts-payable`
+  - Builder: Nixpacks v1.41.0 (Railpack ofrecido pero Nixpacks acabó siendo el efectivo)
+  - Custom Start Command: `python agente_facturas.py --dias 1`
+  - Region: US West
+- Variables de entorno configuradas:
+  - `HOLDED_API_KEY` (copiada del .env de Drive)
+  - `ANTHROPIC_API_KEY` (copiada del .env de Drive)
+  - `GMAIL_TOKEN_JSON` (contenido completo de token.json de Drive, JSON aplanado a una línea)
+  - `ISBEROAL_SHADOW_MODE=true`
+- Primer deploy falló por "No start command could be found" → resuelto añadiendo el Custom Start Command.
+- Segundo deploy: build OK, deploy OK, post-deploy OK, servicio ACTIVE.
+
+### Validado en producción Railway (primer arranque)
+
+- `[OK] Credenciales Gmail cargadas desde variable de entorno` (sin navegador, sin token.json en disco)
+- `[OK] Conectado a Gmail correctamente`
+- `[WARNING] [SHADOW MODE] Activo. No se importará a Holded. Solo se generará XLSX.`
+- `[CORREO] Encontrados 26 correos con facturas`
+- `[NUEVOS] 26 mensajes por procesar` (esperado: Railway no comparte mensajes_procesados.json con local)
+- `POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"` (OCR funcionando)
+- Lógica de discriminación factura/albarán operativa.
+- **CERO llamadas a `api.holded.com`** confirmado en los logs.
+- Producción local intacta: el .bat local sigue corriendo con su cron habitual, Drive sin modificar.
+
+### Notas técnicas de la sesión
+
+- Anomalía menor con PowerShell + portapapeles: `Set-Clipboard` y `| clip` retornaban 2 caracteres en vez del JSON completo, pero el portapapeles real del sistema funcionaba bien (validado pegando en Notepad vacío). El JSON entró correcto en Railway.
+- El archivo temporal `_token_temp.txt` del escritorio se borró al finalizar.
+- Warning `file_cache is only supported with oauth2client<4.0.0` es ignorable (de google-api-python-client, sin impacto).
+
+### Pendiente próxima sesión / inminente
+
+1. Configurar Cron Schedule en Railway para validación recurrente:
+   - Próxima ejecución programada manualmente para hoy ~16:00 CEST (= 14:00 UTC en cron).
+   - Una vez validado el primer cron run, ajustar a `0 0 * * *` (2:00 UTC = 4:00 CEST) o el horario definitivo.
+2. Comparar XLSX generado por Railway vs facturas importadas por agente local durante 5-7 días.
+3. Cuando coincidan 100%: quitar `ISBEROAL_SHADOW_MODE` de Railway y coordinar con Ismael el apagado del .bat local.
+4. Tras validación: migrar de Holded a Supabase como destino final del agente.
+5. Decisión pendiente para más adelante: storage persistente para los XLSX generados en Railway (S3, Drive API, o Supabase Storage).
+
+### Pendiente sin urgencia
+
+- Renombrar el proyecto Railway de `empathetic-illumination` a algo descriptivo (ej. `isberoal-erp-agents`).
+- Considerar migrar de Nixpacks (deprecated) a Railpack en una sesión futura.

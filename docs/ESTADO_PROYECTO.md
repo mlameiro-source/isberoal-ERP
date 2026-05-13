@@ -426,3 +426,62 @@ Corrección importante: la Opción A no es 100% "infra sin tocar código". Requi
 - Revisar el agente `accounts-receivable` (`agente_cobros.py`), que también corre en local sin tocar.
 - Storage persistente de los XLSX generados en Railway (recomendación: Drive API, antes de Supabase).
 - Refactor futuro: invertir el default de SHADOW_MODE para que el comportamiento sin variables de entorno sea seguro (no importar a Holded).
+
+## Sesion 13/05/2026 - Tarde-Noche (Volume Railway persistente + siembra + validacion)
+
+### Hecho
+
+Implementacion completa de Volume persistente en Railway para resolver el bloqueo del switch a produccion identificado en la sesion del 13/05 tarde.
+
+- Codigo del agente parametrizado: linea 67 de `agente_facturas.py` lee ahora `PROCESADOS_PATH` de variable de entorno con fallback al path actual. Cambio compatible hacia atras: el agente local sigue funcionando sin definir la variable.
+- Commits aplicados: `a37a30d feat(accounts-payable): parametrizar PROCESADOS_PATH via env var para Volume Railway` y `bfdac51 chore: ignorar mensajes_procesados_seed.json`.
+- Volume creado en Railway: `isberoal-erp-volume`, montado en `/data`, 5 GB.
+- Variable `PROCESADOS_PATH=/data/mensajes_procesados.json` anadida en Railway.
+- Railway CLI instalado en local (v4.58.0), vinculado al servicio. Par de claves SSH ed25519 generado y registrado con nombre `railway-cli-mlameiro-laptop`.
+- Seed del Volume: copia limpia (sin BOM, LF) del `mensajes_procesados.json` del Drive subida via SSH+stdin con 22273 bytes y 181 mensajes.
+
+### Validado
+
+Run manual de las 17:43 CEST tras Deploy con Start Command revertido y variable nueva:
+
+- Agente arranca OK, SHADOW MODE activo.
+- `[CORREO] Encontrados 17 correos` -> `[DUPLICADOS] 10 mensajes ya procesados (saltados)` (lectura desde `/data` confirmada) -> `[NUEVOS] 7 mensajes por procesar`.
+- 2 facturas reales detectadas (Eleven Labs HVX7QBVE-0002, Eminza 7497670-1) + 5 descartes correctos.
+- Cero llamadas a `api.holded.com`. Salida limpia. Duracion 1m 14s.
+
+Verificacion de persistencia tras el run (SSH al Volume con Start Command temporal `tail -f /dev/null`):
+
+- Archivo `/data/mensajes_procesados.json` actualizado a las 17:45, 23078 bytes (+805 vs seed).
+- 188 mensajes en total (181 iniciales + 7 procesados).
+- Los 7 IDs nuevos del run estan todos presentes en el JSON. Persistencia confirmada end-to-end.
+
+### Incidentes
+
+- Manipulacion del BOM en PowerShell rompio dos veces archivos durante la sesion (linea 67 del .py y primer intento de seed). Resuelto en ambos casos restaurando desde git / regenerando, y aplicando los cambios via `System.IO.File::WriteAllText` con `UTF8Encoding(false)` en lugar de `Set-Content -Encoding UTF8`. Lección: en Windows PowerShell 5.1, para escritura UTF-8 sin BOM SIEMPRE usar la API .NET, nunca `Set-Content -Encoding UTF8`.
+- `ConvertFrom-Json` de PowerShell dio falso negativo validando un JSON intermedio que Python parseaba bien. Para validar JSONs en adelante usar Python directamente.
+
+### Estado al cerrar la sesion
+
+- Railway `isberoal-ERP`: Custom Start Command revertido a `python agente_facturas.py --dias 1`, deployment en curso al cierre. Variables: 5 (incluida `PROCESADOS_PATH`). SHADOW MODE activo. Cron `00 03 * * *`.
+- Volume `isberoal-erp-volume` en `/data` con `mensajes_procesados.json` (188 mensajes).
+- Codigo en main: HEAD bfdac51.
+- Produccion Drive: intacta. Agente local sigue siendo fuente de verdad.
+- Railway CLI y claves SSH operativas en local.
+
+### Pendiente proxima sesion
+
+1. Verificar el cron natural de las 5:00 CEST del 14/05: en logs debe aparecer `[DUPLICADOS] >= 7 mensajes ya procesados` correspondientes a los 7 del run del 13/05. Si OK, persistencia entre runs reales del cron confirmada.
+2. Avisar a Ismael Romay del switch planificado.
+3. Switch a produccion: `ISBEROAL_SHADOW_MODE=true` -> `false` en Railway. Run now. Verificar import de nuevos a Holded sin reimport de los 188 ya marcados.
+4. Desactivar tarea programada del .bat local (no borrar archivo, solo desactivar schedule). Dejar unos dias por si rollback.
+5. Documentar el switch.
+6. Borrar `mensajes_procesados_seed.json` del directorio local (ya esta en .gitignore).
+
+### Pendiente sin urgencia
+
+- Renombrar proyecto Railway de `empathetic-illumination`.
+- Migrar Nixpacks -> Railpack.
+- Revisar `agente_cobros.py`.
+- Storage persistente de XLSX en Railway.
+- Refactor: invertir default de SHADOW_MODE para que el comportamiento sin variables sea seguro.
+- Opcion B (labels Gmail) como alternativa mas limpia que el Volume, antes de migracion a Supabase.

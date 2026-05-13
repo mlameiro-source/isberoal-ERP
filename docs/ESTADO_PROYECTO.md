@@ -1,6 +1,6 @@
-# ESTADO DEL PROYECTO - ISBEROAL ERP
+﻿# ESTADO DEL PROYECTO - ISBEROAL ERP
 
-Última actualización: 11/05/2026
+Última actualización: 13/05/2026
 
 ## Repositorio
 
@@ -349,3 +349,80 @@ Sistema completo funcionando en producción cloud:
 3. Apagar el `.bat` local del Drive en la máquina de la oficina.
 4. Railway pasa a ser el único agente, importando a Holded en automático.
 5. Luego: migración de Holded a Supabase como destino final del agente (sesión aparte). 
+
+## Sesión 13/05/2026 - Tarde (cotejo Railway-vs-local y revisión de código)
+
+### Hecho
+
+Cotejo formal Railway-vs-local del 13/05/2026 con coincidencia 100% en clasificación, número de factura y proveedor.
+
+- Railway (05:02 CEST) y local (10:51 CEST) detectaron los mismos 10 correos en Gmail.
+- Los 3 mensajes que el local procesó como nuevos coincidieron al 100% con la clasificación que hizo Railway:
+  - `19e1d12fe01a0c54` -> FACTURA DN2026692 - Shenzhen Jiahang Tongda Supply Chain Co., Ltd. (importada a Holded por local, 425.65 EUR)
+  - `19e1c8ee950ed374` -> ALBARAN AL/830 - PESADO BARBANZA, S.L.U. (descartado correctamente en ambos)
+  - `19e1c070ea0b8b8e` -> ALBARAN 617002554 - SONEPAR BOIRO (descartado correctamente en ambos)
+- Los otros 7 correos (que el local tenía como ya procesados en su `mensajes_procesados.json`) Railway los procesó desde cero (porque arranca con registro vacío) y los clasificó coherentemente: 2 facturas adicionales (FURGONET BARBANZA 0000001515, Anthropic Ireland 9BF0758D-1992174), 4 albaranes y 1 recibo, todos correctamente descartados.
+- En Railway funcionó la deduplicación intra-lote: dos correos con la misma factura FURGONET se detectaron y el segundo se marcó como `[DUPLICADO] ya procesada en este lote`.
+- Cero errores, cero Tracebacks, cero llamadas a `api.holded.com` desde Railway.
+
+Revisión de código - rama "no shadow" de `agente_facturas.py`
+
+- Comprobado el flujo de `ISBEROAL_SHADOW_MODE` (líneas 821-826): si la variable existe y vale exactamente `"true"` (cualquier capitalización), fuerza `solo_xlsx=True` e `importar_holded=False`. En cualquier otro caso (variable ausente, `"false"`, `""`, etc.) la rama no se ejecuta y se queda con los defaults `solo_xlsx=False, importar_holded=True`.
+- La condición que dispara la importación real a Holded está en la línea 920: `if importar_holded and not solo_xlsx`.
+- Trampa de seguridad detectada: el comportamiento por defecto del agente sin variables de entorno es importar a Holded. Si en el futuro alguien borrase accidentalmente todas las vars en Railway, el agente importaria sin avisar. No es urgente, pero queda anotado para un refactor futuro (invertir el default a "shadow por defecto, hay que poner explicitamente `false` para producción").
+- Decisión para el switch: cambiar `ISBEROAL_SHADOW_MODE` de `true` a `false` (Opción B), no eliminar la variable. Razón: deja constancia visual en Railway de que existe el modo y de que está apagado, y permite reactivarlo cambiando un valor en vez de tener que recordar el nombre de la variable.
+
+Revisión de código - manejo de `mensajes_procesados.json`
+
+- Localizada la lógica completa: `cargar_procesados` (líneas 776-781), `guardar_procesados` (784-787), `marcar_procesado` (790-795), `ya_procesado` (798-800). El archivo se carga al inicio (línea 829), se usa para filtrar mensajes duplicados (línea 842) y se escribe a disco tras procesar cada mensaje (líneas 904-905).
+- Ruta del archivo (línea 67): `PROCESADOS_PATH = BASE_DIR / "mensajes_procesados.json"`. En local apunta al Drive (persistente). En Railway apuntaria a `/app/accounts-payable/mensajes_procesados.json`, que es sistema de archivos efimero: el archivo se crea durante el run y desaparece al apagarse el contenedor.
+
+### Bloqueo identificado para el switch a producción
+
+No se puede quitar SHADOW MODE en el estado actual sin riesgo real de duplicados en Holded.
+
+- Railway corre con `--dias 1` y arranca cada vez con el registro de mensajes procesados vacío.
+- En los datos del 13/05 ya vimos el escenario: Railway detectó como "nuevas" 3 facturas (Shenzhen, FURGONET, Anthropic) de las cuales 2 ya estaban en Holded desde sesiones previas del agente local. Si ayer no hubieramos estado en SHADOW, Railway habria duplicado esas 2 facturas.
+- Hay además un riesgo adicional dia-a-dia: si la query Gmail `--dias 1` no aplica un corte estricto a las últimas 24h y un correo puede aparecer en la búsqueda dos dias seguidos, Railway lo reprocesaria sin tener registro de haberlo hecho ya.
+
+### Decisión: Opción A (Volume persistente en Railway) para la próxima sesión
+
+Tras evaluar 3 alternativas:
+
+- **Opción A - Volume en Railway**: montar un volumen persistente en una ruta tipo `/data`, parametrizar `PROCESADOS_PATH` via variable de entorno, y sembrar el volumen con el `mensajes_procesados.json` actual del Drive.
+- **Opción B - Labels de Gmail**: marcar correos procesados con un label en Gmail. Solución más limpia pero requiere modificar código, ampliar scope OAuth y regenerar token.
+- **Opción C - Consultar Holded antes de importar**: pesado en llamadas, hay que rehacerlo cuando migremos a Supabase.
+
+Elegida Opción A para desbloquear el switch sin entrar en refactor del agente. Opción B queda como tarea futura preferible antes de la migración a Supabase.
+
+Corrección importante: la Opción A no es 100% "infra sin tocar código". Requiere un cambio mínimo en línea 67 de `agente_facturas.py` para parametrizar la ruta del JSON via variable de entorno (con fallback al path actual del Drive, para no romper el agente local).
+
+### Estado al cerrar la sesión
+
+- Railway `isberoal-ERP`: Ready, SHADOW MODE activo, cron 00 03 * * * (5:00 CEST).
+- Cotejo Railway vs local del 13/05: 100% coincidencia en clasificación.
+- Código del agente: revisado y entendido. Cambio mínimo pendiente para la próxima sesión (parametrizar `PROCESADOS_PATH`).
+- Plan de switch: a la espera de implementar Volume persistente en Railway.
+- Producción Drive: intacta, agente local sigue siendo la fuente de verdad.
+
+### Pendiente próxima sesión
+
+1. Avisar a Ismael Romay del switch planificado (notificación, no negociación).
+2. Implementar Opción A:
+   - Crear Volume en Railway y montarlo en `/data`.
+   - Modificar línea 67 de `agente_facturas.py` para usar variable de entorno `PROCESADOS_PATH` con fallback al path actual.
+   - Añadir variable `PROCESADOS_PATH=/data/mensajes_procesados.json` en Railway.
+   - Commit + push + redeploy.
+   - Sembrar el Volume con el `mensajes_procesados.json` actual del Drive (método a evaluar: SSH al contenedor, script bootstrap, o subida vía Railway CLI).
+3. Validar en SHADOW que el Volume funciona: tras el siguiente cron, el JSON debe persistir y Railway debe saltarse los correos ya marcados.
+4. Switch a producción: cambiar `ISBEROAL_SHADOW_MODE=true` -> `false`. Run now. Verificar import a Holded de los nuevos y NO reimport de los antiguos.
+5. Desactivar la tarea programada de Windows del `.bat` local (no borrar el archivo, solo desactivar el schedule). Dejarlo unos dias por si toca rollback.
+6. Documentar el switch en ESTADO_PROYECTO.md.
+
+### Pendiente sin urgencia (sin cambios respecto a sesiones anteriores)
+
+- Renombrar el proyecto Railway de `empathetic-illumination` a algo descriptivo.
+- Migrar Nixpacks -> Railpack en una sesión específica.
+- Revisar el agente `accounts-receivable` (`agente_cobros.py`), que también corre en local sin tocar.
+- Storage persistente de los XLSX generados en Railway (recomendación: Drive API, antes de Supabase).
+- Refactor futuro: invertir el default de SHADOW_MODE para que el comportamiento sin variables de entorno sea seguro (no importar a Holded).

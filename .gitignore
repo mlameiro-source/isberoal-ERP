@@ -1,4 +1,4 @@
-﻿# ─────────────────────────────────────────────
+# ─────────────────────────────────────────────
 # CREDENCIALES Y SECRETOS - NUNCA SUBIR A GIT
 # ─────────────────────────────────────────────
 .env
@@ -50,3 +50,5 @@ env/
 .vscode/
 .idea/
 *.swp
+
+mensajes_procesados_seed.json

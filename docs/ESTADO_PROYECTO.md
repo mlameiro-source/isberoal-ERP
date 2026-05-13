@@ -294,3 +294,58 @@ Pegar este archivo completo al inicio del chat con el mensaje:
    - Cero llamadas a `api.holded.com`
 3. Si OK: el cron funciona en automático. Empezar oficialmente la ventana de validación shadow de 5-7 días.
 4. Si falla: capturar logs y diagnosticar.
+
+## Sesión 13/05/2026 - Mañana (validación cron automático + inicio ventana shadow)
+ 
+### Hecho
+ 
+- Al llegar a la oficina a las 8:00 CEST se comprobó en Railway → Cron Runs que el primer cron automático se había ejecutado correctamente.
+- Detalles de la ejecución del 13/05/2026:
+  - **Timestamp inicio**: 05:02:07 CEST (cron disparado puntual, 2s de margen sobre las 5:00 UTC = 5:00 CEST con horario CEST→UTC)
+  - **Estado final**: Completed (en verde)
+  - **Duración**: 1m 36s (mucho más rápido que las ejecuciones de ayer porque procesa solo los correos nuevos del último día, no los 26 acumulados iniciales)
+  - **Correos encontrados**: 10 (vs 26 ayer en la primera ejecución)
+  - **Próxima ejecución programada**: 14/05/2026 05:00 CEST automática
+### Validado en logs del primer cron automático
+ 
+- `[WARNING] [SHADOW MODE] Activo. No se importará a Holded. Solo se generará XLSX.`
+- `[OK] Credenciales Gmail cargadas desde variable de entorno` (refresh_token sigue válido tras ~15h)
+- `[OK] Conectado a Gmail correctamente`
+- `[CORREO] Encontrados 10 correos con facturas`
+- `[NUEVOS] 10 mensajes por procesar`
+- `[DESCARGA] 3316-INVOICE.pdf` y otros adjuntos procesados correctamente
+- `POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"` (OCR Claude funcionando)
+- `[OCR] FACTURA DN2026692 - Shenzhen Jiahang Tongda Supply Chain Co., Ltd.` (extracción de proveedor + número correcta)
+- `[RENOMBRADO] 20260512_FG_Shenzhen_Jiahang_Tongda_Supply_EXPRESS_CHARGE.pdf` (lógica de renombrado operativa)
+- **Cero llamadas a `api.holded.com`** confirmado.
+### Hito conseguido
+ 
+Sistema completo funcionando en producción cloud:
+- Cron diario automático a las 5:00 CEST.
+- Contenedor arranca desde frío, ejecuta, se apaga.
+- Autenticación Gmail vía refresh_token sin intervención humana.
+- OCR + lógica de discriminación factura/albarán + renombrado funcionando.
+- Producción local (Drive) intacta y operando en paralelo como fuente de verdad.
+### Plan de validación shadow (en curso, 13-19/05/2026)
+ 
+- **Duración**: 7 días (cubrir ciclo semanal completo, incluido el lunes que suele tener pico de correos atrasados del fin de semana).
+- **Método**: cada mañana, Railway → Cron Runs → entrar al run de las 5:00 CEST → contar `[CORREO] Encontrados X correos con facturas` → comparar con número de facturas importadas por agente local en Holded esa misma noche.
+- **Apuntar en una hoja simple**: fecha + nº correos Railway + nº facturas Holded.
+- **Sin storage persistente**: el XLSX que genera Railway es efímero (se borra al apagarse el contenedor). Validación se hace solo con logs. Decisión consciente: simplicidad > exhaustividad en esta fase.
+### Criterios para considerar "OK" durante la ventana
+ 
+- Mismos correos detectados por ambos agentes (o diferencias explicables por `mensajes_procesados.json` separados).
+- Cero errores ni Tracebacks en los logs de Railway.
+- Mismos proveedores extraídos en logs `[OCR] FACTURA X - PROVEEDOR Y`.
+### Banderas rojas que detendrían la validación
+ 
+- Run de Railway no aparece o aparece "Failed" algún día.
+- Railway detecta 0 correos cuando el agente local detectó algunos (búsqueda Gmail rota).
+- Diferencias grandes y sistemáticas en proveedores o datos extraídos.
+### Pendiente al cerrar la ventana shadow (~19-20/05/2026)
+ 
+1. Si todo OK durante 7 días: coordinar con Ismael el momento del switch.
+2. Quitar `ISBEROAL_SHADOW_MODE` de Railway (o ponerla a `false`).
+3. Apagar el `.bat` local del Drive en la máquina de la oficina.
+4. Railway pasa a ser el único agente, importando a Holded en automático.
+5. Luego: migración de Holded a Supabase como destino final del agente (sesión aparte). 

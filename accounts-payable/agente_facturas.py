@@ -64,7 +64,7 @@ FACTURAS_DIR     = BASE_DIR / "Facturas_de_gasto"
 CSV_OUTPUT_DIR   = BASE_DIR / "csv_output"
 XLSX_OUTPUT_DIR  = BASE_DIR / "xlsx_output"
 LOGS_DIR         = BASE_DIR / "logs"
-PROCESADOS_PATH  = BASE_DIR / "mensajes_procesados.json"
+PROCESADOS_PATH  = Path(os.environ.get("PROCESADOS_PATH", str(BASE_DIR / "mensajes_procesados.json")))
 
 for d in [FACTURAS_DIR, CSV_OUTPUT_DIR, XLSX_OUTPUT_DIR, LOGS_DIR]:
     d.mkdir(exist_ok=True)

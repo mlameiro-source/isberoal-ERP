@@ -1,6 +1,6 @@
-﻿# ESTADO DEL PROYECTO - ISBEROAL ERP
+# ESTADO DEL PROYECTO - ISBEROAL ERP
 
-Última actualización: 13/05/2026
+Última actualización: 09/06/2026
 
 ## Repositorio
 
@@ -485,3 +485,40 @@ Verificacion de persistencia tras el run (SSH al Volume con Start Command tempor
 - Storage persistente de XLSX en Railway.
 - Refactor: invertir default de SHADOW_MODE para que el comportamiento sin variables sea seguro.
 - Opcion B (labels Gmail) como alternativa mas limpia que el Volume, antes de migracion a Supabase.
+
+## Sesión 09/06/2026 - Tarde (nuevo agente de cobros / accounts receivable v2)
+
+### Hecho
+
+- Arrancado el nuevo agente de cobros (accounts receivable) en la carpeta accounts-receivable-v2, hermana de accounts-payable en la raíz del repo. La carpeta previa accounts-receivable (agente_cobros.py de 62 KB, del 05/05) queda intacta como versión anterior; no se ha tocado.
+- Diseño: read-only contra Holded (solo peticiones GET, nunca escribe). Por eso queda fuera de la disciplina SHADOW MODE.
+- Módulo holded_ventas.py: lectura paginada de facturas de venta (docType invoice), normalización a nivel de factura. Sin lógica de cobros, para reutilizarlo después en tesorería.
+- cobros.py: genera un XLSX con hoja Cobros (detalle, una fila por factura) y hoja Resumen (totales con fórmulas SUMIF/COUNTIF).
+- Exploración de la API confirmada: el booleano draft distingue borrador (true) de emitida (false); las líneas van en products; los importes de cobro están en total, paymentsTotal y paymentsPending; las fechas vienen en timestamp Unix (se convierten con zona Europe/Madrid, requiere el paquete tzdata).
+- Recurrentes fuera de la v1 (aún no existen en Holded; vendrán con los mantenimientos fotovoltaicos). Proformas también fuera.
+
+### Decisiones de diseño
+
+- Salida a nivel de factura, no de línea.
+- Snapshot completo semanal: cada ejecución regenera el fichero entero, sin merge incremental.
+- Cliente solo por nombre (sin llamada extra a la API de contactos para NIF/dirección).
+- Etiqueta de situación: cuando hay pendiente y vencimiento pasado, Vencida tiene prioridad sobre Parcial. El detalle cobrado/pendiente sigue visible en sus columnas.
+
+### Validado / Confirmado
+
+- Ejecutado contra Holded real: 48 emitidas + 16 borradores.
+- Cuadre interno correcto: cobrado 966.581,50 + pendiente 317.920,77 = total emitido 1.284.502,27.
+- Previsto en borradores: 685.316,61.
+
+### Pendiente próxima sesión
+
+1. Validar que el pendiente de cobro (317.920,77) cuadra con la realidad. Aviso: el VENCIDO sale igual al 100% del pendiente, posible artefacto de facturas con fecha de vencimiento = fecha de emisión.
+2. Decidir desglose por antigüedad: columna Días vencida y/o tramos (al día / 1-30 / 31-60 / 61-90 / +90).
+3. Definir la ruta final de salida en la unidad compartida de Google (variable COBROS_OUTPUT del .env).
+4. Cuando la v1 esté validada en local, planificar la migración a Railway con cron semanal.
+
+### Estado al cerrar la sesión
+
+- Código de accounts-receivable-v2 commiteado al repo (sin .env ni .xlsx, ignorados por .gitignore de la carpeta).
+- El agente corre solo en LOCAL. No desplegado en Railway todavía.
+- accounts-payable: sin cambios en esta sesión.

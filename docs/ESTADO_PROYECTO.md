@@ -549,3 +549,32 @@ Verificacion de persistencia tras el run (SSH al Volume con Start Command tempor
 3. Definir la ruta final de salida en la unidad compartida (variable COBROS_OUTPUT del .env).
 4. Con la v1 validada, planificar migración de cobros a Railway con cron semanal.
 5. Global: cerrar el switch de accounts-payable a producción. La ventana shadow (13-19/05) lleva casi un mes superada sin incidencias documentadas. Coordinar con Ismael.
+
+## Sesión 11/06/2026 - [Mañana/Tarde] (tesorería: módulo de nóminas)
+
+### Hecho
+
+- Creada la carpeta tesoreria/ en el repo (commit 154227d) con README y .gitignore propio (ignora .env, *.xlsx, __pycache__). Es el sistema de proyección de tesorería: proyeccion.py (futuro), conciliacion.py (futuro) y nominas.py (hecho hoy). Decisión de arquitectura: las nóminas NO van dentro de accounts-payable (esa carpeta la construye Railway y es otro dominio); viven como módulo de datos dentro de tesoreria.
+- Implementado nominas.py (commit 81cbb8f): lee nominas_datos.xlsx y genera el calendario de salidas de caja por personal. Tres conceptos con sus fechas reales: nómina neta (último hábil del mes menos 2 días hábiles), Seguros Sociales (último hábil del mes siguiente al devengo) e IRPF modelo 111 (trimestral, día 20 del mes siguiente al cierre, ajustado a hábil).
+- Decisión de diseño sobre el archivo de datos: una fila por empleado y mes (el módulo agrega por mes). Se eligió este formato, en vez de totales mensuales, porque coincide con lo que producirá el OCR de los PDF de la gestoría en fase 2, evitando reescritura.
+- El archivo nominas_datos.xlsx se mantiene a mano de momento (datos en local, fuera de Git). Columna mes acepta fecha o texto YYYY-MM. Columna tipo: real/prevision; si un mes mezcla, cuenta como prevision. Hoja Ajustes para incorporar contrataciones futuras con fecha de efecto.
+- Robustez: el lector aborta con error claro si un importe viene vacío o no numérico (evita el fallo silencioso de leer celdas como 0). Detectado y resuelto en datos reales: el primer archivo tenía fórmulas sin caché que se leían como 0; corregido pegando valores.
+
+### Validado
+
+- Ejecución local con datos reales 2026: 12 meses cargados (ene-may real, jun-dic prevision), plantilla creciendo de 4 a 11 personas. Coherencia interna por mes sin descuadres.
+- 16 salidas de caja jun-dic 2026 con fechas correctas: nómina junio 26/06 (cuadra con la previsión de Martín), SS e IRPF en sus fechas esperadas. T4 y SS de diciembre caen en enero 2027, fuera del rango, correctamente excluidos.
+
+### Estado al cerrar la sesión
+
+- tesoreria/nominas.py operativo en LOCAL, read-only (solo lee el xlsx). Primer ladrillo de proyeccion.py listo.
+- nominas_datos.xlsx vive solo en local (C:\...\tesoreria\), ignorado por Git. Pendiente decidir si se mueve a la unidad compartida de Google.
+- accounts-payable y accounts-receivable-v2: sin cambios en esta sesión.
+
+### Pendiente próxima sesión
+
+1. Siguiente ladrillo de tesorería: holded_compras.py (pagos a proveedores, lectura read-only de facturas de compra en Holded), reutilizando el patrón de holded_ventas.py.
+2. Después: proyeccion.py uniendo saldo bancario (ancla) + cobros previstos + nóminas + pagos a proveedores - impuestos.
+3. Pregunta abierta de tesorería aún sin resolver: qué banco usa ISBEROAL y en qué formato exporta los movimientos (CSV / XLSX / Norma 43), necesaria antes de conciliacion.py.
+4. Pendientes heredados de cobros v2: corregir en Holded las 4 facturas con vencimiento = emisión, y configurar condiciones de pago por cliente en Holded.
+5. Global: cerrar el switch de accounts-payable a producción. Coordinar con Ismael.

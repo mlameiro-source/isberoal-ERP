@@ -523,7 +523,7 @@ Verificacion de persistencia tras el run (SSH al Volume con Start Command tempor
 - El agente corre solo en LOCAL. No desplegado en Railway todavía.
 - accounts-payable: sin cambios en esta sesión.
 
-## Sesión 11/06/2026 - [Mañana/Tarde] (cobros v2: vencido real vs artefacto y antigüedad)
+## Sesión 11/06/2026 - Tarde (cobros v2: vencido real vs artefacto y antigüedad)
 
 ### Hecho
 

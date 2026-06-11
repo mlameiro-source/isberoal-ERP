@@ -1,6 +1,6 @@
-# ESTADO DEL PROYECTO - ISBEROAL ERP
+﻿# ESTADO DEL PROYECTO - ISBEROAL ERP
 
-Última actualización: 09/06/2026
+Última actualización: 11/06/2026
 
 ## Repositorio
 
@@ -522,3 +522,30 @@ Verificacion de persistencia tras el run (SSH al Volume con Start Command tempor
 - Código de accounts-receivable-v2 commiteado al repo (sin .env ni .xlsx, ignorados por .gitignore de la carpeta).
 - El agente corre solo en LOCAL. No desplegado en Railway todavía.
 - accounts-payable: sin cambios en esta sesión.
+
+## Sesión 11/06/2026 - [Mañana/Tarde] (cobros v2: vencido real vs artefacto y antigüedad)
+
+### Hecho
+
+- Diagnóstico read-only de vencimientos (nuevo script diagnostico_vencido.py): de las 8 facturas pendientes, 4 tienen plazos reales pactados (1/15/30/60 días) por 144.649,91 y 4 tienen vencimiento igual a emisión por 173.270,86. Todo el pendiente (317.920,77) está efectivamente vencido a día de hoy: el aviso de la sesión anterior era en parte artefacto, pero el dato de fondo es real.
+- Hallazgo de proceso: 23 de 48 facturas emitidas tienen vencimiento igual a emisión. Indica que las facturas se crean en Holded sin condiciones de pago y Holded copia la fecha de emisión como vencimiento.
+- cobros.py ampliado: columnas nuevas "Días vencida" y "Aviso" (marca Venc=emision con fondo naranja), desglose del vencido por tramos en el Resumen (1-30 / 31-60 / 61-90 / +90) y contador de facturas con aviso. Columnas añadidas tras Situación para no romper las fórmulas existentes.
+- Commit c9a4675 pusheado a main (cobros.py + diagnostico_vencido.py).
+
+### Validado
+
+- Ejecución local correcta: 48 emitidas, 16 borradores, 23 avisos Venc=emision.
+- Tramos del vencido: 1-30 días 75.442,36 / 31-60 días 35.383,43 / 61-90 días 3.630,00 / +90 días 203.464,98. Suma igual al VENCIDO total 317.920,77.
+
+### Estado al cerrar la sesión
+
+- accounts-receivable-v2 sigue corriendo solo en LOCAL, read-only contra Holded. No desplegado en Railway.
+- accounts-payable: sin cambios. Railway sigue en SHADOW MODE con el .bat local como fuente de verdad.
+
+### Pendiente próxima sesión
+
+1. Corregir en Holded la fecha de vencimiento real de las 4 facturas pendientes con vencimiento igual a emisión, y re-ejecutar diagnostico_vencido.py para verificar la redistribución de tramos.
+2. Tarea de proceso (no de código): configurar condiciones de pago por cliente en Holded para que las facturas nuevas hereden vencimiento real. Crítico para el agente de tesorería.
+3. Definir la ruta final de salida en la unidad compartida (variable COBROS_OUTPUT del .env).
+4. Con la v1 validada, planificar migración de cobros a Railway con cron semanal.
+5. Global: cerrar el switch de accounts-payable a producción. La ventana shadow (13-19/05) lleva casi un mes superada sin incidencias documentadas. Coordinar con Ismael.

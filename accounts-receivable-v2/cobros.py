@@ -32,10 +32,11 @@ ENCABEZADOS = [
     "ID Holded", "Estado", "Nº factura", "Cliente",
     "Fecha emisión", "Fecha vencimiento", "Descripción",
     "Base", "IVA", "Total", "Cobrado", "Pendiente",
-    "Situación", "Moneda", "Tags",
+    "Situación", "Días vencida", "Aviso", "Moneda", "Tags",
 ]
 
 _AZUL = "1F3864"
+_NARANJA = "FFD966"
 _COLOR_SIT = {
     "Cobrada": "C6EFCE",
     "Parcial": "FFEB9C",
@@ -57,6 +58,29 @@ def situacion(f, hoy):
     return "Pendiente"
 
 
+def dias_vencida(f, hoy):
+    """Dias transcurridos desde el vencimiento. None si no esta vencida."""
+    if f["es_borrador"] or f["pendiente"] <= 0.005:
+        return None
+    if f["fecha_vencimiento"] and f["fecha_vencimiento"] < hoy:
+        return (hoy - f["fecha_vencimiento"]).days
+    return None
+
+
+def aviso(f):
+    """Marca facturas emitidas con vencimiento igual a la emision.
+
+    Suele indicar que la factura se creo en Holded sin condiciones de pago
+    (Holded copia la fecha de emision como vencimiento). En facturas de
+    contado real el aviso aparece igualmente y puede ignorarse.
+    """
+    if (not f["es_borrador"]
+            and f["fecha_vencimiento"]
+            and f["fecha_vencimiento"] == f["fecha_emision"]):
+        return "Venc=emision"
+    return ""
+
+
 def _formato_cobros(ws, n_filas):
     cab_fill = PatternFill("solid", fgColor=_AZUL)
     cab_font = Font(name="Arial", bold=True, color="FFFFFF")
@@ -67,6 +91,7 @@ def _formato_cobros(ws, n_filas):
         c.alignment = Alignment(horizontal="center", vertical="center")
 
     cuerpo = Font(name="Arial")
+    aviso_fill = PatternFill("solid", fgColor=_NARANJA)
     for row in range(2, n_filas + 2):
         for col in range(1, len(ENCABEZADOS) + 1):
             ws.cell(row=row, column=col).font = cuerpo
@@ -74,18 +99,22 @@ def _formato_cobros(ws, n_filas):
             ws.cell(row=row, column=col).number_format = "DD/MM/YYYY"
         for col in (8, 9, 10, 11, 12):  # importes
             ws.cell(row=row, column=col).number_format = "#,##0.00"
+        ws.cell(row=row, column=14).number_format = "0"  # dias vencida
         sit = ws.cell(row=row, column=13)
         color = _COLOR_SIT.get(sit.value)
         if color:
             sit.fill = PatternFill("solid", fgColor=color)
+        av = ws.cell(row=row, column=15)
+        if av.value:
+            av.fill = aviso_fill
 
-    anchos = [22, 10, 12, 26, 14, 16, 30, 12, 12, 13, 12, 13, 12, 8, 16]
+    anchos = [22, 10, 12, 26, 14, 16, 30, 12, 12, 13, 12, 13, 12, 12, 14, 8, 16]
     for i, w in enumerate(anchos, start=1):
         ws.column_dimensions[chr(64 + i) if i <= 26 else "A"].width = w
 
     ws.freeze_panes = "A2"
     if n_filas > 0:
-        ws.auto_filter.ref = f"A1:O{n_filas + 1}"
+        ws.auto_filter.ref = f"A1:Q{n_filas + 1}"
 
 
 def _hoja_resumen(wb, n_filas):
@@ -109,6 +138,19 @@ def _hoja_resumen(wb, n_filas):
         ("Cobrado", '=SUMIF(Cobros!B:B,"Emitida",Cobros!K:K)', "#,##0.00"),
         ("Pendiente de cobro (emitidas)", '=SUMIF(Cobros!B:B,"Emitida",Cobros!L:L)', "#,##0.00"),
         ("De ello, VENCIDO", '=SUMIF(Cobros!M:M,"Vencida",Cobros!L:L)', "#,##0.00"),
+        ("    Vencido 1-30 días",
+         '=SUMIFS(Cobros!L:L,Cobros!M:M,"Vencida",Cobros!N:N,">=1",Cobros!N:N,"<=30")',
+         "#,##0.00"),
+        ("    Vencido 31-60 días",
+         '=SUMIFS(Cobros!L:L,Cobros!M:M,"Vencida",Cobros!N:N,">=31",Cobros!N:N,"<=60")',
+         "#,##0.00"),
+        ("    Vencido 61-90 días",
+         '=SUMIFS(Cobros!L:L,Cobros!M:M,"Vencida",Cobros!N:N,">=61",Cobros!N:N,"<=90")',
+         "#,##0.00"),
+        ("    Vencido +90 días",
+         '=SUMIFS(Cobros!L:L,Cobros!M:M,"Vencida",Cobros!N:N,">=91")',
+         "#,##0.00"),
+        ("Facturas con aviso Venc=emision (nº)", '=COUNTIF(Cobros!O:O,"Venc=emision")', "0"),
         ("Previsto en borradores (total)", '=SUMIF(Cobros!B:B,"Borrador",Cobros!J:J)', "#,##0.00"),
     ]
     r = 4
@@ -119,7 +161,7 @@ def _hoja_resumen(wb, n_filas):
         cel.number_format = fmt
         r += 1
 
-    ws.column_dimensions["A"].width = 32
+    ws.column_dimensions["A"].width = 36
     ws.column_dimensions["B"].width = 16
 
 
@@ -146,6 +188,8 @@ def construir(facturas, ruta):
             f["descripcion"],
             f["base"], f["iva"], f["total"], f["cobrado"], f["pendiente"],
             situacion(f, hoy),
+            dias_vencida(f, hoy),
+            aviso(f),
             f["moneda"],
             " - ".join(f["tags"]) if f["tags"] else "",
         ])
@@ -161,5 +205,7 @@ if __name__ == "__main__":
     ruta = construir(facturas, SALIDA)
     emitidas = sum(1 for f in facturas if not f["es_borrador"])
     borradores = len(facturas) - emitidas
+    avisos = sum(1 for f in facturas if aviso(f))
     print(f"Generado: {os.path.abspath(ruta)}")
     print(f"  {emitidas} emitidas, {borradores} borradores")
+    print(f"  {avisos} facturas con aviso Venc=emision")
